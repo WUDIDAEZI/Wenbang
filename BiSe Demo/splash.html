@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>启动海报 - 青汇校园</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;  /* 禁止滚动 */
+            background-color: #000;
+        }
+
+        /* 9:16 容器，全屏 */
+        .splash-poster {
+            width: 100%;
+            height: 100vh;
+            aspect-ratio: 9 / 16;
+            margin: 0 auto;
+            position: relative;
+            cursor: pointer;  /* 提示可点击 */
+            /* 入场动画：淡入 + 微微放大 */
+            animation: posterFadeIn 0.8s cubic-bezier(0.2, 0.9, 0.4, 1.1) forwards;
+        }
+
+        /* 海报图片填满容器，保持比例 */
+        .poster-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;  /* 如果图片比例不是9:16，会裁剪，但保证填满 */
+            display: block;
+        }
+
+        /* 可选：在底部加一个“跳转提示” */
+        .skip-tip {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 12px;
+            color: rgba(255,255,255,0.6);
+            background: rgba(0,0,0,0.4);
+            padding: 6px 12px;
+            width: fit-content;
+            margin: 0 auto;
+            border-radius: 20px;
+            pointer-events: none; /* 让提示不干扰点击 */
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+
+        /* 入场动画关键帧 */
+        @keyframes posterFadeIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.96);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* 可选：退出动画（自动跳转时如果用不到可以不加，直接跳转） */
+        @keyframes posterFadeOut {
+            from { opacity: 1; transform: scale(1); }
+            to { opacity: 0; transform: scale(0.98); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="splash-poster" id="posterPage">
+        <!-- 替换成你的9:16海报图片路径 -->
+        <img src="splash.jpg" alt="启动海报" class="poster-img">
+        <div class="skip-tip">正在进入首页… 点击任意位置跳过</div>
+    </div>
+
+    <script>
+        const poster = document.getElementById('posterPage');
+        let autoTimer = null;
+
+        // 跳转到真正的主页的函数
+        function goToMain() {
+            if (autoTimer) clearTimeout(autoTimer);
+            // 可选：播放退出动画（0.2秒快速淡出）
+            poster.style.animation = 'posterFadeOut 0.2s ease forwards';
+            setTimeout(() => {
+                window.location.href = 'main.html';
+            }, 200);
+        }
+
+        // 1. 自动跳转：1.5秒后
+        autoTimer = setTimeout(goToMain, 1500);
+
+        // 2. 点击任意位置立即跳转
+        poster.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (autoTimer) clearTimeout(autoTimer);
+            goToMain();
+        });
+    </script>
+</body>
+</html>
