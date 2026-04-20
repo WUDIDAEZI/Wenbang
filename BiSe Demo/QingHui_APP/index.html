@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <!-- 移动端适配，禁止缩放，完美适配手机9:16比例 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>青汇校园 - 启动页</title>
+    <style>
+        /* 全局初始化，清除默认边距 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            /* 页面禁止滚动，模拟APP原生界面 */
+            overflow: hidden;
+        }
+
+        /* ===================== 整体容器：严格 9:16 竖屏比例 ===================== */
+        /* 9宽 16高 固定比例，所有APP页面统一使用这个比例 */
+        .splash-container {
+            width: 100%;
+            aspect-ratio: 9 / 16;
+            /* 占满浏览器可视区域，居中显示 */
+            margin: 0 auto;
+            height: 100vh;
+            max-height: 100vh;
+
+            /* 【可替换】启动页背景（渐变色/背景图片二选一） */
+            background: linear-gradient(135deg, #2d80ce, #62a5fc);
+
+            /* 弹性布局 居中所有内容 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+
+            /* CSS3 页面整体淡入动画 */
+            animation: pageFadeIn 0.7s ease forwards;
+            
+            /* 重要：点击光标变成小手，提示用户可点击 */
+            cursor: pointer;
+        }
+
+        /* ===================== APP图标 严格尺寸 180px * 180px ===================== */
+        .app-icon {
+            /* 【固定尺寸】你要求的 180 × 180 像素 */
+            width: 180px;
+            height: 180px;
+
+            /* 【可替换】替换为你的logo图片路径，直接修改src即可 */
+            border-radius: 20px; /* 图标圆角，可自行修改 */
+
+            /* CSS3 图标缩放弹出动画 */
+            opacity: 0;
+            transform: scale(0.7);
+            animation: iconScale 1s ease 0.2s forwards;
+        }
+
+        /* ===================== APP名称文字 ===================== */
+        .app-title {
+            margin-top: 30px; /* 图标与文字间距 */
+            font-size: 24px;
+            font-weight: 600;
+            color: #ffffff;
+            font-family: "Microsoft Yahei", sans-serif;
+
+            /* 文字淡入动画 */
+            opacity: 0;
+            transform: translateY(15px);
+            animation: textFade 1s ease 0.5s forwards;
+        }
+
+        /* ===================== 底部副标题 ===================== */
+        .app-desc {
+            margin-top: 12px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.75);
+
+            /* 文字淡入动画 */
+            opacity: 0;
+            transform: translateY(15px);
+            animation: textFade 1s ease 0.8s forwards;
+        }
+
+        /* ===================== 点击提示文字 ===================== */
+        .click-tip {
+            margin-top: 40px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+            opacity: 0;
+            animation: textFade 1s ease 1.2s forwards;
+        }
+
+        /* ===================== CSS3 所有动画关键帧 ===================== */
+        /* 页面整体淡入 */
+        @keyframes pageFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* APP图标 放大入场动画 */
+        @keyframes iconScale {
+            from { opacity: 0; transform: scale(0.7); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* 文字上移淡入动画 */
+        @keyframes textFade {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 页面退出动画（点击后平滑消失） */
+        @keyframes pageFadeOut {
+            from { opacity: 1; transform: scale(1); }
+            to { opacity: 0; transform: scale(0.95); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 启动页主容器 9:16比例 -->
+    <div class="splash-container" id="splashPage">
+        <!-- APP图标 -->
+        <img src="icon.jpg" alt="APP图标" class="app-icon">
+        <!-- APP名称 -->
+        <div class="app-title">青汇校园</div>
+        <!-- 底部描述 -->
+        <div class="app-desc">校园生活一站式服务平台</div>
+        <!-- 点击提示 -->
+        <div class="click-tip">点击屏幕进入主页</div>
+    </div>
+
+    <script>
+        // 获取启动页元素
+        const splash = document.getElementById('splashPage');
+
+        // ============== 核心功能：点击屏幕 进入下一页 ==============
+        splash.addEventListener('click', function() {
+            // 1. 先播放退出动画（丝滑消失）
+            splash.style.animation = 'pageFadeOut 3s ease forwards';
+            
+            // 2. 动画结束后跳转到 主页面（9:16）
+            setTimeout(() => {
+                window.location.href = "splash.html";
+            }, 400);
+        });
+    </script>
+</body>
+</html>

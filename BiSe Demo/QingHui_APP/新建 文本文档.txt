@@ -1,0 +1,6 @@
+伙伴功能 →friend
+主页→ home
+生活维权→live
+校园成长→school
+出行指南→ travel
+就业指导→work

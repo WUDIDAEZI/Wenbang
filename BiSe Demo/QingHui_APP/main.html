@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>青汇校园 - 主页</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #2d80ce; }
+        
+        .home-container {
+            width: 100%;
+            height: 100vh;
+            aspect-ratio: 9 / 16;
+            margin: 0 auto;
+            position: relative;
+            background-color: #2d80ce;
+        }
+        
+        .home-img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        .hotspot-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .hotspot {
+            position: absolute;
+            background: transparent;
+            cursor: pointer;
+        }
+        
+        .debug .hotspot {
+            background: rgba(255, 0, 0, 0.3);
+            border: 2px solid yellow;
+            box-sizing: border-box;
+        }
+        
+        .control-panel {
+            position: fixed;
+            bottom: 60px;
+            right: 10px;
+            background: rgba(0,0,0,0.85);
+            color: white;
+            border-radius: 12px;
+            padding: 10px;
+            width: 260px;
+            max-height: 70%;
+            overflow-y: auto;
+            z-index: 1000;
+            font-size: 12px;
+            font-family: monospace;
+            backdrop-filter: blur(8px);
+            pointer-events: auto;
+        }
+        .control-panel h4 { margin: 0 0 8px 0; font-size: 14px; text-align: center; }
+        .control-item { margin-bottom: 12px; border-top: 1px solid #555; padding-top: 8px; }
+        .control-label { font-weight: bold; margin-bottom: 4px; }
+        .control-sliders { display: flex; flex-wrap: wrap; gap: 6px; }
+        .slider-group { flex: 1; min-width: 60px; }
+        .slider-group input { width: 100%; }
+        .slider-group span { display: block; font-size: 10px; }
+        .btn-group { display: flex; gap: 8px; margin-top: 10px; }
+        .btn { background: #2d80ce; border: none; color: white; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        .btn-danger { background: #c0392b; }
+        .coord-value { font-size: 10px; background: #222; padding: 2px 4px; border-radius: 4px; margin-top: 4px; }
+        
+        .debug-panel {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 1001;
+            font-family: monospace;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+        
+        .toast-message {
+            position: fixed;
+            bottom: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.75);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 14px;
+            white-space: nowrap;
+            z-index: 1002;
+            animation: fadeInOut 2s ease forwards;
+        }
+        
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateX(-50%) scale(0.9); }
+            15% { opacity: 1; transform: translateX(-50%) scale(1); }
+            85% { opacity: 1; transform: translateX(-50%) scale(1); }
+            100% { opacity: 0; transform: translateX(-50%) scale(0.9); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="home-container" id="homeContainer">
+    <img src="home.jpg" alt="主页" class="home-img" id="homeImg">
+    <div class="hotspot-layer" id="hotspotLayer"></div>
+</div>
+
+<div class="debug-panel" id="debugToggle">🔧 调试模式: OFF</div>
+<div class="debug-panel" id="panelToggle" style="right: 80px; background: #2d80ce;">📐 调整热区</div>
+
+<script>
+    // ========== 热区数据（已移除多余的“首页”热区） ==========
+    let hotSpotsData = [
+        // 5个功能图标
+        { name: "出行指南", page: "travel.html", left: 3, top: 17.67187464237213, width: 15, height: 8.2265625 },
+        { name: "校园成长", page: "school.html", left: 23.375, top: 17.765625, width: 14.333332061767578, height: 8.203124642372133 },
+        { name: "伙伴功能", page: "friend.html", left: 43.375, top: 17.90625, width: 14.458332061767578, height: 8.132812142372133 },
+        { name: "就业指导", page: "work.html", left: 63.583332061767585, top: 17.9765625, width: 14.625, height: 7.992187142372134 },
+        { name: "生活维权", page: "live.html", left: 82.83333206176758, top: 17.90625, width: 14.416667938232422, height: 7.992187142372134 },
+        // 底部左侧（消息）
+        { name: "消息", toast: true, left: 46.08333206176758, top: 92.06250286102295, width: 9.875, height: 5.906249999999999 },
+        // 底部右侧（个人中心）
+        { name: "个人中心", toast: true, left: 80.70833206176758, top: 91.92187786102295, width: 9.875, height: 6.23437213897702 }
+    ];
+    
+    let debugMode = false;
+    let panelVisible = false;
+    let currentHotspots = JSON.parse(JSON.stringify(hotSpotsData));
+    const container = document.getElementById('homeContainer');
+    const img = document.getElementById('homeImg');
+    const hotspotLayer = document.getElementById('hotspotLayer');
+    const debugBtn = document.getElementById('debugToggle');
+    const panelBtn = document.getElementById('panelToggle');
+    let controlPanel = null;
+    
+    function showToast(msg) {
+        const existing = document.querySelector('.toast-message');
+        if (existing) existing.remove();
+        const toast = document.createElement('div');
+        toast.className = 'toast-message';
+        toast.textContent = msg || '该功能暂未开发';
+        document.body.appendChild(toast);
+        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 2000);
+    }
+    
+    function updateHotspots() {
+        const imgRect = img.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const offsetX = imgRect.left - containerRect.left;
+        const offsetY = imgRect.top - containerRect.top;
+        const imgW = imgRect.width;
+        const imgH = imgRect.height;
+        
+        hotspotLayer.innerHTML = '';
+        
+        currentHotspots.forEach(data => {
+            const div = document.createElement('div');
+            div.className = 'hotspot';
+            const leftPercent = data.left;
+            const topPercent = data.top;
+            const widthPercent = data.width;
+            const heightPercent = data.height;
+            
+            const actualLeft = offsetX + (leftPercent / 100) * imgW;
+            const actualTop = offsetY + (topPercent / 100) * imgH;
+            const actualWidth = (widthPercent / 100) * imgW;
+            const actualHeight = (heightPercent / 100) * imgH;
+            
+            div.style.position = 'absolute';
+            div.style.left = actualLeft + 'px';
+            div.style.top = actualTop + 'px';
+            div.style.width = actualWidth + 'px';
+            div.style.height = actualHeight + 'px';
+            
+            if (data.page) {
+                div.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    window.location.href = data.page;
+                });
+            } else if (data.toast) {
+                div.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    showToast('该功能暂未开发');
+                });
+            }
+            hotspotLayer.appendChild(div);
+        });
+        
+        if (debugMode) container.classList.add('debug');
+        else container.classList.remove('debug');
+    }
+    
+    function createControlPanel() {
+        if (controlPanel) controlPanel.remove();
+        const panel = document.createElement('div');
+        panel.className = 'control-panel';
+        panel.innerHTML = '<h4>🎛️ 热区微调 (百分比)</h4>';
+        
+        currentHotspots.forEach((spot, idx) => {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'control-item';
+            itemDiv.innerHTML = `
+                <div class="control-label">${spot.name}</div>
+                <div class="control-sliders">
+                    <div class="slider-group"><span>L</span><input type="range" min="0" max="100" step="0.1" value="${spot.left}" data-idx="${idx}" data-field="left"></div>
+                    <div class="slider-group"><span>T</span><input type="range" min="0" max="100" step="0.1" value="${spot.top}" data-idx="${idx}" data-field="top"></div>
+                    <div class="slider-group"><span>W</span><input type="range" min="0" max="100" step="0.1" value="${spot.width}" data-idx="${idx}" data-field="width"></div>
+                    <div class="slider-group"><span>H</span><input type="range" min="0" max="100" step="0.1" value="${spot.height}" data-idx="${idx}" data-field="height"></div>
+                </div>
+                <div class="coord-value">L:${spot.left.toFixed(1)} T:${spot.top.toFixed(1)} W:${spot.width.toFixed(1)} H:${spot.height.toFixed(1)}</div>
+            `;
+            panel.appendChild(itemDiv);
+        });
+        
+        const btnGroup = document.createElement('div');
+        btnGroup.className = 'btn-group';
+        btnGroup.innerHTML = `
+            <button class="btn" id="applyBtn">应用并刷新</button>
+            <button class="btn btn-danger" id="resetBtn">重置</button>
+            <button class="btn" id="closePanel">关闭</button>
+        `;
+        panel.appendChild(btnGroup);
+        document.body.appendChild(panel);
+        
+        panel.querySelectorAll('input[type="range"]').forEach(slider => {
+            slider.addEventListener('input', (e) => {
+                const idx = parseInt(slider.dataset.idx);
+                const field = slider.dataset.field;
+                let val = parseFloat(slider.value);
+                currentHotspots[idx][field] = val;
+                const parent = slider.closest('.control-item');
+                const coordDiv = parent.querySelector('.coord-value');
+                const spot = currentHotspots[idx];
+                coordDiv.innerText = `L:${spot.left.toFixed(1)} T:${spot.top.toFixed(1)} W:${spot.width.toFixed(1)} H:${spot.height.toFixed(1)}`;
+                updateHotspots();
+            });
+        });
+        
+        document.getElementById('applyBtn').addEventListener('click', () => {
+            console.log('调整后的热区数据：');
+            console.log(JSON.stringify(currentHotspots, null, 2));
+            showToast('已应用，数据已打印到控制台');
+        });
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            currentHotspots = JSON.parse(JSON.stringify(hotSpotsData));
+            const sliders = panel.querySelectorAll('input[type="range"]');
+            sliders.forEach(slider => {
+                const idx = parseInt(slider.dataset.idx);
+                const field = slider.dataset.field;
+                slider.value = currentHotspots[idx][field];
+            });
+            panel.querySelectorAll('.control-item').forEach((item, idx) => {
+                const spot = currentHotspots[idx];
+                const coordDiv = item.querySelector('.coord-value');
+                coordDiv.innerText = `L:${spot.left.toFixed(1)} T:${spot.top.toFixed(1)} W:${spot.width.toFixed(1)} H:${spot.height.toFixed(1)}`;
+            });
+            updateHotspots();
+            showToast('已重置');
+        });
+        document.getElementById('closePanel').addEventListener('click', () => {
+            panel.remove();
+            controlPanel = null;
+            panelVisible = false;
+        });
+        controlPanel = panel;
+    }
+    
+    function toggleDebug() {
+        debugMode = !debugMode;
+        debugBtn.innerHTML = debugMode ? '🔧 调试模式: ON (点击关闭)' : '🔧 调试模式: OFF (点击开启)';
+        debugBtn.style.background = debugMode ? 'rgba(255,0,0,0.8)' : 'rgba(0,0,0,0.7)';
+        updateHotspots();
+    }
+    
+    function togglePanel() {
+        if (controlPanel) { controlPanel.remove(); controlPanel = null; panelVisible = false; }
+        else { createControlPanel(); panelVisible = true; }
+    }
+    
+    window.addEventListener('load', () => {
+        updateHotspots();
+        window.addEventListener('resize', () => setTimeout(updateHotspots, 100));
+    });
+    if (img.complete) updateHotspots();
+    else img.addEventListener('load', updateHotspots);
+    
+    debugBtn.addEventListener('click', toggleDebug);
+    panelBtn.addEventListener('click', togglePanel);
+</script>
+</body>
+</html>

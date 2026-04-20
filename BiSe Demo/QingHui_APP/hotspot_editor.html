@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>热区校准工具 - 青汇校园</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none; /* 避免拖拽时选中文字 */
+        }
+        body {
+            background: #1e1e2f;
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .toolbar {
+            background: #2d2d44;
+            padding: 15px 20px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 1000px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .toolbar input, .toolbar button, .toolbar select {
+            padding: 8px 14px;
+            border-radius: 30px;
+            border: none;
+            font-size: 14px;
+            background: #3e3e5e;
+            color: white;
+            cursor: pointer;
+        }
+        .toolbar button {
+            background: #2d80ce;
+        }
+        .toolbar button.danger {
+            background: #c0392b;
+        }
+        .toolbar button.success {
+            background: #27ae60;
+        }
+        .canvas-container {
+            background: #000;
+            display: inline-block;
+            position: relative;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            border-radius: 24px;
+            overflow: auto;
+            max-width: 100%;
+            max-height: 80vh;
+        }
+        canvas {
+            display: block;
+            width: auto;
+            height: auto;
+            max-width: 100%;
+            cursor: crosshair;
+        }
+        .info-panel {
+            background: #2d2d44;
+            padding: 15px;
+            border-radius: 16px;
+            margin-top: 20px;
+            width: 100%;
+            max-width: 1000px;
+            color: #eee;
+            font-size: 13px;
+        }
+        .hotspot-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .hotspot-card {
+            background: #3e3e5e;
+            border-radius: 12px;
+            padding: 8px 12px;
+            width: 180px;
+            position: relative;
+            cursor: move;
+        }
+        .hotspot-card.selected {
+            background: #2d80ce;
+        }
+        .hotspot-card input {
+            width: 100%;
+            margin: 4px 0;
+            background: #1e1e2f;
+            border: none;
+            color: white;
+            padding: 4px;
+            border-radius: 6px;
+        }
+        .delete-hotspot {
+            position: absolute;
+            top: 4px;
+            right: 8px;
+            background: #c0392b;
+            border: none;
+            color: white;
+            border-radius: 20px;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .coord {
+            font-family: monospace;
+            font-size: 10px;
+            margin-top: 4px;
+        }
+        pre {
+            background: #1e1e2f;
+            padding: 10px;
+            border-radius: 12px;
+            overflow-x: auto;
+            font-size: 11px;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="toolbar">
+    <label style="color:white;">背景图片:</label>
+    <input type="text" id="imagePath" placeholder="例如 home.jpg 或完整路径" value="home.jpg">
+    <button id="loadImageBtn">加载图片</button>
+    <button id="addHotspotBtn">➕ 添加热区</button>
+    <button id="exportConfigBtn" class="success">📋 导出配置 (JSON)</button>
+    <button id="clearAllBtn" class="danger">🗑️ 清空所有热区</button>
+    <select id="pageSelect">
+        <option value="main">主页 (main.html)</option>
+        <option value="friend">伙伴 (friend.html)</option>
+        <option value="live">生活维权 (live.html)</option>
+        <option value="school">校园成长 (school.html)</option>
+        <option value="travel">出行指南 (travel.html)</option>
+        <option value="work">就业指导 (work.html)</option>
+    </select>
+    <span style="color:white;">提示: 点击热区选中后，可拖拽移动或拖拽四角缩放</span>
+</div>
+
+<div class="canvas-container">
+    <canvas id="canvas" width="800" height="1422"></canvas>
+</div>
+
+<div class="info-panel">
+    <div><strong>热区列表</strong> (点击选中，可拖拽/缩放；修改名称/跳转)</div>
+    <div id="hotspotList" class="hotspot-list"></div>
+    <div style="margin-top:12px;">
+        <strong>导出配置说明:</strong> 点击导出JSON后，复制内容，替换到对应HTML文件的 <code>hotSpotsData</code> 数组中。
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let img = new Image();
+    let imgLoaded = false;
+    let imgWidth = 0, imgHeight = 0;
+    let displayWidth = 0, displayHeight = 0;
+    let scale = 1; // canvas上显示的缩放比例 (实际像素 / 原始图片像素)
+    
+    // 热区数据 (存储原始图片百分比坐标)
+    let hotspots = [];
+    let selectedIndex = -1;
+    let isDragging = false;
+    let dragStartX = 0, dragStartY = 0;
+    let dragCorner = null; // 'move' 或 'tl','tr','bl','br'
+    
+    // DOM 元素
+    const imagePathInput = document.getElementById('imagePath');
+    const loadBtn = document.getElementById('loadImageBtn');
+    const addBtn = document.getElementById('addHotspotBtn');
+    const exportBtn = document.getElementById('exportConfigBtn');
+    const clearBtn = document.getElementById('clearAllBtn');
+    const pageSelect = document.getElementById('pageSelect');
+    const hotspotListDiv = document.getElementById('hotspotList');
+    
+    // 辅助函数: 从存储的百分比计算canvas上的矩形
+    function percentToCanvas(rect) {
+        return {
+            x: (rect.x / 100) * displayWidth,
+            y: (rect.y / 100) * displayHeight,
+            w: (rect.w / 100) * displayWidth,
+            h: (rect.h / 100) * displayHeight
+        };
+    }
+    
+    // 从canvas坐标转百分比
+    function canvasToPercent(x, y, w, h) {
+        return {
+            x: (x / displayWidth) * 100,
+            y: (y / displayHeight) * 100,
+            w: (w / displayWidth) * 100,
+            h: (h / displayHeight) * 100
+        };
+    }
+    
+    // 绘制所有热区
+    function draw() {
+        if (!imgLoaded) return;
+        ctx.clearRect(0, 0, displayWidth, displayHeight);
+        ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
+        
+        hotspots.forEach((hot, idx) => {
+            const rect = percentToCanvas(hot);
+            ctx.save();
+            if (idx === selectedIndex) {
+                ctx.strokeStyle = '#ffaa00';
+                ctx.lineWidth = 3;
+                ctx.fillStyle = 'rgba(255, 170, 0, 0.2)';
+            } else {
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 2;
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+            }
+            ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+            ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+            
+            // 绘制控制点 (如果选中)
+            if (idx === selectedIndex && rect.w > 10 && rect.h > 10) {
+                ctx.fillStyle = '#ffffff';
+                const size = 8;
+                const points = [
+                    [rect.x, rect.y], [rect.x+rect.w, rect.y], 
+                    [rect.x, rect.y+rect.h], [rect.x+rect.w, rect.y+rect.h],
+                    [rect.x+rect.w/2, rect.y], [rect.x+rect.w/2, rect.y+rect.h],
+                    [rect.x, rect.y+rect.h/2], [rect.x+rect.w, rect.y+rect.h/2]
+                ];
+                points.forEach(p => {
+                    ctx.fillRect(p[0]-size/2, p[1]-size/2, size, size);
+                });
+            }
+            ctx.fillStyle = 'white';
+            ctx.font = '12px monospace';
+            ctx.shadowBlur = 0;
+            ctx.fillText(hot.name || '热区', rect.x+2, rect.y+14);
+            ctx.restore();
+        });
+    }
+    
+    // 根据鼠标坐标查找是否点中某个热区或控制点
+    function hitTest(mouseX, mouseY) {
+        for (let i = hotspots.length-1; i >= 0; i--) {
+            const rect = percentToCanvas(hotspots[i]);
+            // 检查控制点 (仅当选中时显示控制点，但这里先允许点击边缘缩放)
+            // 简单实现：如果选中当前热区，检查四角区域
+            if (i === selectedIndex) {
+                const size = 12;
+                const corners = [
+                    { corner: 'tl', x: rect.x, y: rect.y },
+                    { corner: 'tr', x: rect.x+rect.w, y: rect.y },
+                    { corner: 'bl', x: rect.x, y: rect.y+rect.h },
+                    { corner: 'br', x: rect.x+rect.w, y: rect.y+rect.h }
+                ];
+                for (let c of corners) {
+                    if (Math.abs(mouseX - c.x) <= size && Math.abs(mouseY - c.y) <= size) {
+                        return { idx: i, type: c.corner };
+                    }
+                }
+                // 检查边缘中点 (可选)
+                const midTop = { x: rect.x+rect.w/2, y: rect.y };
+                if (Math.abs(mouseX - midTop.x) <= size && Math.abs(mouseY - midTop.y) <= size) return { idx: i, type: 'mt' };
+                const midBottom = { x: rect.x+rect.w/2, y: rect.y+rect.h };
+                if (Math.abs(mouseX - midBottom.x) <= size && Math.abs(mouseY - midBottom.y) <= size) return { idx: i, type: 'mb' };
+                const midLeft = { x: rect.x, y: rect.y+rect.h/2 };
+                if (Math.abs(mouseX - midLeft.x) <= size && Math.abs(mouseY - midLeft.y) <= size) return { idx: i, type: 'ml' };
+                const midRight = { x: rect.x+rect.w, y: rect.y+rect.h/2 };
+                if (Math.abs(mouseX - midRight.x) <= size && Math.abs(mouseY - midRight.y) <= size) return { idx: i, type: 'mr' };
+            }
+            // 整体区域拖拽
+            if (mouseX >= rect.x && mouseX <= rect.x+rect.w && mouseY >= rect.y && mouseY <= rect.y+rect.h) {
+                return { idx: i, type: 'move' };
+            }
+        }
+        return null;
+    }
+    
+    // 重新渲染热区列表UI
+    function renderHotspotList() {
+        hotspotListDiv.innerHTML = '';
+        hotspots.forEach((hot, idx) => {
+            const card = document.createElement('div');
+            card.className = `hotspot-card ${idx === selectedIndex ? 'selected' : ''}`;
+            card.innerHTML = `
+                <button class="delete-hotspot" data-idx="${idx}">✖</button>
+                <input type="text" class="hotspot-name" value="${hot.name || '热区'}" data-idx="${idx}" placeholder="名称">
+                <input type="text" class="hotspot-page" value="${hot.page || ''}" data-idx="${idx}" placeholder="跳转页面 (如 friend.html)">
+                <div class="coord">L:${hot.x.toFixed(1)}% T:${hot.y.toFixed(1)}% W:${hot.w.toFixed(1)}% H:${hot.h.toFixed(1)}%</div>
+            `;
+            card.addEventListener('click', (e) => {
+                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') {
+                    selectedIndex = idx;
+                    renderHotspotList();
+                    draw();
+                }
+            });
+            hotspotListDiv.appendChild(card);
+        });
+        // 绑定输入事件
+        document.querySelectorAll('.hotspot-name').forEach(inp => {
+            inp.addEventListener('change', (e) => {
+                const idx = parseInt(inp.dataset.idx);
+                hotspots[idx].name = inp.value;
+                renderHotspotList();
+                draw();
+            });
+        });
+        document.querySelectorAll('.hotspot-page').forEach(inp => {
+            inp.addEventListener('change', (e) => {
+                const idx = parseInt(inp.dataset.idx);
+                hotspots[idx].page = inp.value;
+                renderHotspotList();
+                draw();
+            });
+        });
+        document.querySelectorAll('.delete-hotspot').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(btn.dataset.idx);
+                hotspots.splice(idx, 1);
+                if (selectedIndex >= hotspots.length) selectedIndex = -1;
+                renderHotspotList();
+                draw();
+            });
+        });
+    }
+    
+    // 缩放热区
+    function resizeHotspot(idx, corner, mouseX, mouseY, startRect) {
+        let rect = percentToCanvas(hotspots[idx]);
+        let newRect = { ...rect };
+        const minW = 10, minH = 10;
+        if (corner === 'tl') {
+            newRect.x = Math.min(mouseX, rect.x+rect.w - minW);
+            newRect.w = rect.x+rect.w - newRect.x;
+            newRect.y = Math.min(mouseY, rect.y+rect.h - minH);
+            newRect.h = rect.y+rect.h - newRect.y;
+        } else if (corner === 'tr') {
+            newRect.w = Math.max(minW, mouseX - rect.x);
+            newRect.y = Math.min(mouseY, rect.y+rect.h - minH);
+            newRect.h = rect.y+rect.h - newRect.y;
+        } else if (corner === 'bl') {
+            newRect.x = Math.min(mouseX, rect.x+rect.w - minW);
+            newRect.w = rect.x+rect.w - newRect.x;
+            newRect.h = Math.max(minH, mouseY - rect.y);
+        } else if (corner === 'br') {
+            newRect.w = Math.max(minW, mouseX - rect.x);
+            newRect.h = Math.max(minH, mouseY - rect.y);
+        } else if (corner === 'mt') {
+            newRect.y = Math.min(mouseY, rect.y+rect.h - minH);
+            newRect.h = rect.y+rect.h - newRect.y;
+        } else if (corner === 'mb') {
+            newRect.h = Math.max(minH, mouseY - rect.y);
+        } else if (corner === 'ml') {
+            newRect.x = Math.min(mouseX, rect.x+rect.w - minW);
+            newRect.w = rect.x+rect.w - newRect.x;
+        } else if (corner === 'mr') {
+            newRect.w = Math.max(minW, mouseX - rect.x);
+        }
+        // 转换为百分比
+        const percentRect = canvasToPercent(newRect.x, newRect.y, newRect.w, newRect.h);
+        hotspots[idx].x = percentRect.x;
+        hotspots[idx].y = percentRect.y;
+        hotspots[idx].w = percentRect.w;
+        hotspots[idx].h = percentRect.h;
+        draw();
+    }
+    
+    // 鼠标事件
+    let mouseDown = false;
+    let dragRectStart = null;
+    let dragHotspotIdx = null;
+    
+    function onMouseDown(e) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        let mouseX = (e.clientX - rect.left) * scaleX;
+        let mouseY = (e.clientY - rect.top) * scaleY;
+        if (mouseX < 0 || mouseX > displayWidth || mouseY < 0 || mouseY > displayHeight) return;
+        
+        const hit = hitTest(mouseX, mouseY);
+        if (hit) {
+            e.preventDefault();
+            mouseDown = true;
+            dragHotspotIdx = hit.idx;
+            dragCorner = hit.type;
+            selectedIndex = hit.idx;
+            renderHotspotList();
+            draw();
+            const currentRect = percentToCanvas(hotspots[dragHotspotIdx]);
+            dragRectStart = { x: currentRect.x, y: currentRect.y, w: currentRect.w, h: currentRect.h };
+            dragStartX = mouseX;
+            dragStartY = mouseY;
+        } else {
+            selectedIndex = -1;
+            renderHotspotList();
+            draw();
+        }
+    }
+    
+    function onMouseMove(e) {
+        if (!mouseDown || dragHotspotIdx === null) return;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        let mouseX = (e.clientX - rect.left) * scaleX;
+        let mouseY = (e.clientY - rect.top) * scaleY;
+        if (mouseX < 0) mouseX = 0;
+        if (mouseY < 0) mouseY = 0;
+        if (mouseX > displayWidth) mouseX = displayWidth;
+        if (mouseY > displayHeight) mouseY = displayHeight;
+        
+        if (dragCorner === 'move') {
+            // 移动
+            let dx = mouseX - dragStartX;
+            let dy = mouseY - dragStartY;
+            let newX = dragRectStart.x + dx;
+            let newY = dragRectStart.y + dy;
+            // 边界限制
+            newX = Math.min(Math.max(0, newX), displayWidth - dragRectStart.w);
+            newY = Math.min(Math.max(0, newY), displayHeight - dragRectStart.h);
+            const percentRect = canvasToPercent(newX, newY, dragRectStart.w, dragRectStart.h);
+            hotspots[dragHotspotIdx].x = percentRect.x;
+            hotspots[dragHotspotIdx].y = percentRect.y;
+            draw();
+        } else {
+            // 缩放
+            resizeHotspot(dragHotspotIdx, dragCorner, mouseX, mouseY, dragRectStart);
+        }
+    }
+    
+    function onMouseUp(e) {
+        mouseDown = false;
+        dragHotspotIdx = null;
+        renderHotspotList(); // 刷新坐标显示
+        draw();
+    }
+    
+    canvas.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    
+    // 加载图片
+    function loadImage() {
+        let src = imagePathInput.value.trim();
+        if (!src) src = 'home.jpg';
+        img.src = src;
+        img.onload = () => {
+            imgWidth = img.width;
+            imgHeight = img.height;
+            // 保持宽高比，canvas显示宽度最多800px，高度按比例
+            const maxWidth = 800;
+            displayWidth = Math.min(maxWidth, imgWidth);
+            displayHeight = (displayWidth / imgWidth) * imgHeight;
+            canvas.width = displayWidth;
+            canvas.height = displayHeight;
+            scale = displayWidth / imgWidth;
+            imgLoaded = true;
+            draw();
+        };
+        img.onerror = () => alert('图片加载失败，请检查路径');
+    }
+    
+    // 添加热区 (默认在中间)
+    function addHotspot() {
+        const defaultRect = { x: 30, y: 30, w: 15, h: 15 };
+        hotspots.push({
+            name: `热区${hotspots.length+1}`,
+            page: '',
+            x: defaultRect.x,
+            y: defaultRect.y,
+            w: defaultRect.w,
+            h: defaultRect.h
+        });
+        selectedIndex = hotspots.length-1;
+        renderHotspotList();
+        draw();
+    }
+    
+    // 导出配置
+    function exportConfig() {
+        const page = pageSelect.value;
+        const config = {
+            page: page,
+            hotspots: hotspots.map(h => ({
+                name: h.name,
+                page: h.page,
+                left: h.x,
+                top: h.y,
+                width: h.w,
+                height: h.h
+            }))
+        };
+        const jsonStr = JSON.stringify(config, null, 2);
+        // 复制到剪贴板
+        navigator.clipboard.writeText(jsonStr).then(() => {
+            alert('配置已复制到剪贴板！\n请粘贴到对应HTML文件的 hotSpotsData 数组中。');
+        }).catch(() => {
+            prompt('手动复制以下配置:', jsonStr);
+        });
+        console.log(jsonStr);
+    }
+    
+    function clearAll() {
+        hotspots = [];
+        selectedIndex = -1;
+        renderHotspotList();
+        draw();
+    }
+    
+    loadBtn.addEventListener('click', loadImage);
+    addBtn.addEventListener('click', addHotspot);
+    exportBtn.addEventListener('click', exportConfig);
+    clearBtn.addEventListener('click', clearAll);
+    
+    // 初始加载默认图片
+    loadImage();
+    
+    // 根据页面选择加载预设配置（可选，但不必须）
+</script>
+</body>
+</html>
